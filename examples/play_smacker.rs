@@ -6,6 +6,9 @@ use rom_res_rs::ResourceFile;
 use rom_media_rs::video::{SmackerPlayer, PlayerState, RenderingFramesState};
 use std::time::Instant;
 
+const VIDEO4_RES: &[u8] = include_bytes!("VIDEO4.RES");
+const VIDEO_PATH: &str = "INTRO/04.smk";
+
 #[repr(C)]
 struct Vec2 {
     x: f32,
@@ -24,9 +27,6 @@ struct Stage {
     player: SmackerPlayer,
     last_instant: Instant,
 }
-
-const VIDEO4_RES: &[u8] = include_bytes!("VIDEO4.RES");
-const VIDEO_PATH: &str = "INTRO/04.smk";
 
 impl Stage {
     pub fn new(ctx: &mut Context) -> Stage {

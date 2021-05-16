@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 rom-res-rs = { git = "https://github.com/madwareru/rom-res-rs", version = "0.1.6"}
-rom-media-rs = { git = "https://github.com/madwareru/rom-media-rs", version = "0.6.19" }
-rom-loaders-rs = { git = "https://github.com/madwareru/rom-loaders-rs", version = "0.4.26"}
+rom-media-rs = { git = "https://github.com/madwareru/rom-media-rs", version = "0.6.24" }
+rom-loaders-rs = { git = "https://github.com/madwareru/rom-loaders-rs", version = "0.4.27"}
 miniquad = "0.3.0-alpha.30"
 bytemuck = "1.4.1"

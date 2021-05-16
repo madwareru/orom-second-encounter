@@ -8,8 +8,15 @@ use {
             ingame_sprite_decorators::{PalettedSpriteRenderingScope}
         }
     },
-    rom_loaders_rs::images::ingame_sprite::{read_image, ImageType, read_palette}
+    rom_loaders_rs::images::ingame_sprite::{
+        read_image,
+        ImageType,
+        read_palette,
+        read_raw_palette,
+        DEFAULT_RAW_PALETTE_OFFSET
+    }
 };
+use std::time::Instant;
 
 const GRAPHICS_RES: &[u8] = include_bytes!("GRAPHICS.RES");
 const BUFFER_SIZE: usize = 512;
@@ -86,10 +93,12 @@ impl Picture {
 impl Blittable<u32> for Highlighter {
     fn blit_impl(&self, buffer: &mut [u32], buffer_width: usize, self_rect: Rect, dst_rect: Rect) {
         let mut stride = dst_rect.y_range.start * buffer_width;
-
-        for _ in dst_rect.y_range.start..dst_rect.y_range.start+self_rect.y_range.end {
-            for clr in &mut buffer[stride + dst_rect.x_range.start..stride+dst_rect.x_range.start+self_rect.x_range.end].iter_mut() {
-                if *clr == 0 { *clr = self.background_rgba; }
+        for _ in 0..self_rect.y_range.end {
+            let start = stride + dst_rect.x_range.start;
+            let end = start + self_rect.x_range.end;
+            for clr in &mut buffer[start..end].iter_mut() {
+                if *clr != 0 { continue; }
+                *clr = self.background_rgba;
             }
             stride += buffer_width;
         }
@@ -106,6 +115,38 @@ impl Blittable<u32> for Highlighter {
 
 mod sprite_files {
     pub const PATHS: &[&str] = &[
+        "projectiles/acid/sprites.16a",
+        "projectiles/bless/sprites.16a",
+        "projectiles/chain/sprites.16a",
+        "projectiles/curse/sprites.16a",
+        "projectiles/drain/sprites.16a",
+        "projectiles/fireball/sprites.16a",
+        "projectiles/firebolt/sprites.16a",
+        "projectiles/fireexpl/sprites.16a",
+        "projectiles/firewall/sprites.16a",
+        "projectiles/healing/sprites.16a",
+        "projectiles/lightnin/sprites.16a",
+        "projectiles/meteor/sprites.16a",
+        "projectiles/p_air/sprites.16a",
+        "projectiles/p_earth/sprites.16a",
+        "projectiles/p_fire/sprites.16a",
+        "projectiles/p_water/sprites.16a",
+        "projectiles/poison/sprites.16a",
+        "projectiles/poison_d/sprites.16a",
+        "projectiles/shield/sprites.16a",
+        "projectiles/smallxpl/sprites.16a",
+        "projectiles/smoke0/sprites.16a",
+        "projectiles/smoke1/sprites.16a",
+        "projectiles/steam/sprites.16a",
+        "projectiles/teleport/sprites.16a",
+        "projectiles/wall/sprites.16a",
+        "projectiles/xbowman/arrow.256",
+        "projectiles/archer/arrow.256",
+        "projectiles/catap1/sprites.256",
+        "projectiles/catap2/sprites.256",
+        "projectiles/firebolt/sprites.256",
+        "projectiles/goblin/arrow.256",
+        "projectiles/orc/arrow.256",
         "structures/bridge1v/house.256",
         "structures/bridge2/house.256",
         "structures/bridge3/house.256",
@@ -285,18 +326,12 @@ mod sprite_files {
 }
 
 fn main() {
+    let instant = Instant::now();
     let cursor = Cursor::new(GRAPHICS_RES);
     let mut resource_file = ResourceFile::new(cursor)
-        .expect(&format!("failed to open MAIN.RES"));
+        .expect(&format!("failed to open GRAPHICS.RES"));
 
     let mut sub_rects = Vec::new();
-    let green_highlighter = Highlighter {
-        background_rgba: 0x2000DDDD
-    };
-    let red_highlighter = Highlighter {
-        background_rgba: 0x20FF0000
-    };
-
     let stage_atlases = {
         let mut stage_atlases = Vec::new();
         let mut atlas_id = 0;
@@ -316,21 +351,40 @@ fn main() {
             BUFFER_SIZE
         );
 
+        let default_projectile_pal_resource = resource_file
+            .get_resource_bytes("projectiles/projectiles.pal")
+            .expect(&format!("failed to load resource {}", "projectiles/projectiles.pal"));
+        let proj_cursor = &mut Cursor::new(default_projectile_pal_resource);
+
+        let default_projectile_pal =
+            read_raw_palette(proj_cursor, DEFAULT_RAW_PALETTE_OFFSET)
+                .unwrap()
+                .unwrap();
+
         for unit_path in sprite_files::PATHS {
             let unit_resource = resource_file
                 .get_resource_bytes(unit_path)
                 .expect(&format!("failed to load resource {}", unit_path));
 
+            let image_type = if unit_path.ends_with("16a") {
+                ImageType::Dot16a
+            } else if unit_path.ends_with("16") {
+                ImageType::Dot16
+            } else {
+                ImageType::Dot256
+            };
+
             let unit_sprite =
                 read_image(
                     &mut Cursor::new(unit_resource),
-                    ImageType::Dot256
+                    image_type
                 ).expect(&format!("failed to load resource bmp content"));
+
             let palette =
                 read_palette(
                     &mut Cursor::new(unit_resource),
-                    ImageType::Dot256
-                ).unwrap().unwrap();
+                    image_type
+                ).unwrap();
 
             for i in 0..unit_sprite.frames.len() {
                 let frame = &(unit_sprite.frames[i]);
@@ -340,17 +394,22 @@ fn main() {
 
                 let scope = &PalettedSpriteRenderingScope{
                     image_data: &unit_sprite,
-                    palette: &palette,
+                    palette: if let Some(pal) = &palette {
+                        &pal
+                    } else {
+                        &default_projectile_pal
+                    },
                     img_id: i
                 };
 
                 BlitBuilder::try_create(&mut sp, scope).unwrap().blit();
                 let (mut min_i, mut min_j) = (frame.width as usize - 1, frame.height as usize - 1);
                 let (mut max_i, mut max_j) = (0, 0);
+                let colors = sp.color_data();
                 for jj in 0..frame.height as usize {
                     for ii in 0..frame.width as usize {
                         let offset = sp.get_width() * jj + ii;
-                        if sp.color_data()[offset] == 0 { continue; }
+                        if colors[offset] == 0 { continue; }
                         min_i = min_i.min(ii);
                         min_j = min_j.min(jj);
                         max_i = max_i.max(ii);
@@ -498,27 +557,15 @@ fn main() {
         }
         (new_colors, new_sub_rects)
     };
-
-    for sub_rect in sub_rects.iter() {
-        let highlighter = if sub_rect.is_adjusted_to_shelf {
-            &red_highlighter
-        } else {
-            &green_highlighter
-        };
-        BlitBuilder::try_create(&mut colors, highlighter)
-            .unwrap()
-            .with_dest_pos(sub_rect.x as i32, sub_rect.y as i32)
-            .with_source_subrect(
-                0,
-                0,
-                sub_rect.w,
-                sub_rect.h
-            ).blit();
-    }
+    let elapsed = instant.elapsed().as_millis();
+    println!("elapsed: {} ms", elapsed);
 
     let mut pic = Picture::new(ATLAS_SIZE, ATLAS_SIZE);
     pic.mutate(|buf, _, _| {
-        for (cd, cs) in (&mut buf[..]).iter_mut().zip(colors.color_data()) {
+        for (cd, cs) in (&mut buf[..])
+            .iter_mut()
+            .zip(colors.color_data())
+        {
             *cd = *cs
         }
     });
