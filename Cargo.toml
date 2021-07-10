@@ -7,8 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rom-res-rs = { git = "https://github.com/madwareru/rom-res-rs", version = "0.1.6"}
-rom-media-rs = { git = "https://github.com/madwareru/rom-media-rs", version = "0.6.24" }
-rom-loaders-rs = { git = "https://github.com/madwareru/rom-loaders-rs", version = "0.4.27"}
+rom-res-rs = { git = "https://github.com/madwareru/rom-res-rs", version = "0.1.7"}
+rom-media-rs = { git = "https://github.com/madwareru/rom-media-rs", version = "0.6.25" }
+rom-loaders-rs = { git = "https://github.com/madwareru/rom-loaders-rs", version = "0.4.28"}
 miniquad = "0.3.0-alpha.30"
 bytemuck = "1.4.1"

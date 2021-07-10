@@ -3,7 +3,7 @@ use {
     rom_res_rs::*,
     rom_media_rs::{
         image_rendering::{
-            blittable::{BlitBuilder, Blittable, Rect},
+            blittable::{BlitBuilder, Blittable},
             bmp_sprite_decorators::TrueColorSurfaceSprite,
             ingame_sprite_decorators::{PalettedSpriteRenderingScope}
         }
@@ -16,7 +16,6 @@ use {
         DEFAULT_RAW_PALETTE_OFFSET
     }
 };
-use std::time::Instant;
 
 const GRAPHICS_RES: &[u8] = include_bytes!("GRAPHICS.RES");
 const BUFFER_SIZE: usize = 512;
@@ -41,10 +40,6 @@ struct ShelfInfo {
     pub y_position: i32,
     pub right: i32,
     pub height: i32,
-}
-
-struct Highlighter{
-    pub background_rgba: u32
 }
 
 pub struct Picture {
@@ -86,30 +81,6 @@ impl Picture {
             }
             println!()
         }
-    }
-
-}
-
-impl Blittable<u32> for Highlighter {
-    fn blit_impl(&self, buffer: &mut [u32], buffer_width: usize, self_rect: Rect, dst_rect: Rect) {
-        let mut stride = dst_rect.y_range.start * buffer_width;
-        for _ in 0..self_rect.y_range.end {
-            let start = stride + dst_rect.x_range.start;
-            let end = start + self_rect.x_range.end;
-            for clr in &mut buffer[start..end].iter_mut() {
-                if *clr != 0 { continue; }
-                *clr = self.background_rgba;
-            }
-            stride += buffer_width;
-        }
-    }
-
-    fn get_width(&self) -> usize {
-        32768
-    }
-
-    fn get_height(&self) -> usize {
-        32768
     }
 }
 
@@ -326,7 +297,6 @@ mod sprite_files {
 }
 
 fn main() {
-    let instant = Instant::now();
     let cursor = Cursor::new(GRAPHICS_RES);
     let mut resource_file = ResourceFile::new(cursor)
         .expect(&format!("failed to open GRAPHICS.RES"));
@@ -474,7 +444,7 @@ fn main() {
         }
     });
 
-    let (mut colors, sub_rects) = {
+    let (colors, _sub_rects) = {
         let mut shelfs: Vec<ShelfInfo> = Vec::new();
         let mut current_shelf = ShelfInfo {y_position: 0, right: 0, height: 0 };
 
@@ -557,8 +527,6 @@ fn main() {
         }
         (new_colors, new_sub_rects)
     };
-    let elapsed = instant.elapsed().as_millis();
-    println!("elapsed: {} ms", elapsed);
 
     let mut pic = Picture::new(ATLAS_SIZE, ATLAS_SIZE);
     pic.mutate(|buf, _, _| {
