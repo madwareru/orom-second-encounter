@@ -5,8 +5,11 @@ use std::io::Cursor;
 use rom_res_rs::ResourceFile;
 use rom_media_rs::video::{SmackerPlayer, PlayerState, RenderingFramesState};
 use std::time::Instant;
+use std::fs::File;
+use std::path::Path;
+use std::borrow::Borrow;
 
-const VIDEO4_RES: &[u8] = include_bytes!("VIDEO4.RES");
+const VIDEO4_RES: &[u8] = include_bytes!("assets/VIDEO4.RES");
 const VIDEO_PATH: &str = "INTRO/04.smk";
 
 #[repr(C)]
@@ -25,13 +28,13 @@ struct Stage {
     bindings: Bindings,
     stage_surface: TrueColorSurfaceSprite,
     player: SmackerPlayer,
-    last_instant: Instant,
+    last_instant: Instant
 }
 
 impl Stage {
     pub fn new(ctx: &mut Context) -> Stage {
-        let cursor = Cursor::new(VIDEO4_RES);
-        let mut resource_file = ResourceFile::new(cursor)
+        let mut cursor = Cursor::new(VIDEO4_RES);
+        let mut resource_file = ResourceFile::new(&mut cursor)
             .expect(&format!("failed to open VIDEO4.RES"));
 
         let smk_file = resource_file.get_resource_bytes(VIDEO_PATH)

@@ -17,7 +17,7 @@ use {
     }
 };
 
-const GRAPHICS_RES: &[u8] = include_bytes!("GRAPHICS.RES");
+const GRAPHICS_RES: &[u8] = include_bytes!("assets/GRAPHICS.RES");
 const BUFFER_SIZE: usize = 512;
 const STAGE_ATLAS_SIZE: usize = 1024;
 const ATLAS_SIZE: usize = 4096;
