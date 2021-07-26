@@ -17,13 +17,8 @@ long_description = ""
 rom-res-rs = { git = "https://github.com/madwareru/rom-res-rs", version = "0.1.9"}
 rom-media-rs = { git = "https://github.com/madwareru/rom-media-rs", version = "0.6.26" }
 rom-loaders-rs = { git = "https://github.com/madwareru/rom-loaders-rs", version = "0.4.28"}
+simple-tiled-wfc = {git = "https://github.com/madwareru/simple-tiled-wfc.git", version = "0.4.5" }
+rand = "0.7"
 miniquad = "0.3.0-alpha.30"
 bytemuck = "1.4.1"
 bitsetium = "0.0.0"
-simple-tiled-wfc = { version = "0.2.6", git = "https://github.com/madwareru/simple-tiled-wfc.git" }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-objc = "0.2.7"
-objc-foundation = "0.1.1"
-objc_id = "0.1"
-libc = "0.2.98"

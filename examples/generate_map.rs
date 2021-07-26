@@ -4,8 +4,12 @@ use rom_media_rs::image_rendering::blittable::{Blittable, BlitBuilder};
 use std::io::Cursor;
 use rom_res_rs::ResourceFile;
 use rom_loaders_rs::images::sprite::BmpSprite;
-use simple_tiled_wfc::grid_generation::{WfcModule, WfcContext};
+use simple_tiled_wfc::grid_generation::{WfcModule, WfcContext, WfcEntropyHeuristic, DefaultEntropyHeuristic, DefaultEntropyChoiceHeuristic, WfcEntropyChoiceHeuristic};
 use std::collections::VecDeque;
+use bitsetium::{BitSearch, BitEmpty, BitSet, BitIntersection, BitUnion, BitTestNone};
+use std::hash::Hash;
+use simple_tiled_wfc::{get_bits_set_count, BitsIterator};
+use rand::{thread_rng, Rng};
 
 const GRAPHICS_RES: &[u8] = include_bytes!("assets/GRAPHICS.RES");
 const DIRT: u8 = 0;
@@ -52,6 +56,80 @@ struct Vertex {
 
 type CustomBitSet = [u8; 30];
 
+const fn manhattan(x1: usize, y1: usize, x2: usize, y2: usize) -> usize {
+    (x1 as i64 - x2 as i64).abs() as usize + (y1 as i64 - y2 as i64).abs() as usize
+}
+
+struct LeastDistanceHeuristic {
+    row: usize,
+    column: usize,
+}
+
+impl<TBitSet> WfcEntropyHeuristic<TBitSet> for LeastDistanceHeuristic
+    where TBitSet:
+    BitSearch + BitEmpty + BitSet + BitIntersection +
+    BitUnion + BitTestNone + Hash + Eq + Copy + BitIntersection<Output = TBitSet> +
+    BitUnion<Output = TBitSet>
+{
+    fn choose_next_collapsed_slot(
+        &self,
+        width: usize,
+        _height: usize,
+        _modules: &[WfcModule<TBitSet>],
+        available_indices: &[usize]
+    ) -> usize {
+        let (mut min_id, mut min_distance) = (available_indices.len() - 1, usize::MAX);
+        for i in 0..available_indices.len() {
+            let idx = available_indices[i];
+            let row = idx / width;
+            let column = idx % width;
+            let d = manhattan(self.row, self.column, row, column);
+            if d < min_distance {
+                min_id = i;
+                min_distance = d;
+            }
+        }
+        min_id
+    }
+}
+
+struct DrawingChoiceHeuristic<TBitSet>
+    where TBitSet:
+    BitSearch + BitEmpty + BitSet + BitIntersection +
+    BitUnion + BitTestNone + Hash + Eq + Copy + BitIntersection<Output = TBitSet> +
+    BitUnion<Output = TBitSet>
+{
+    fallback: DefaultEntropyChoiceHeuristic,
+    preferable_bits: TBitSet
+}
+impl<TBitSet> WfcEntropyChoiceHeuristic<TBitSet> for DrawingChoiceHeuristic<TBitSet>
+    where TBitSet:
+    BitSearch + BitEmpty + BitSet + BitIntersection +
+    BitUnion + BitTestNone + Hash + Eq + Copy + BitIntersection<Output = TBitSet> +
+    BitUnion<Output = TBitSet>
+{
+    fn choose_least_entropy_bit(
+        &self,
+        width: usize,
+        height: usize,
+        row: usize,
+        column: usize,
+        modules: &[WfcModule<TBitSet>],
+        slot_bits: &TBitSet
+    ) -> usize {
+        let intersection = self.preferable_bits.intersection(*slot_bits);
+        if get_bits_set_count(&intersection) > 0 {
+            let mut rng = thread_rng();
+            let random_bit_id = rng.gen_range(0, get_bits_set_count(&intersection));
+            let mut iterator = BitsIterator::new(&intersection);
+            iterator.nth(random_bit_id).unwrap()
+        } else {
+            self.fallback.choose_least_entropy_bit(width, height, row, column, modules, slot_bits)
+        }
+    }
+}
+
+
 struct TileInfo {
     north_west: u8,
     north_east: u8,
@@ -75,6 +153,7 @@ struct Stage {
     tile_modules: Vec<usize>,
     show_grid: bool,
     should_update: bool,
+    mouse_down: bool,
     draw_queue: VecDeque<(usize, usize, u8)>
 }
 
@@ -274,7 +353,13 @@ impl Stage {
             modules.push(module);
         }
 
-        let mut wfc_context: WfcContext<CustomBitSet> = WfcContext::new(&modules, WIDTH, HEIGHT);
+        let mut wfc_context: WfcContext<CustomBitSet> = WfcContext::new(
+            &modules,
+            WIDTH,
+            HEIGHT,
+            DefaultEntropyHeuristic::default(),
+            DefaultEntropyChoiceHeuristic::default()
+        );
 
         let tile_modules = wfc_context
             .collapse(100)
@@ -344,6 +429,7 @@ impl Stage {
             tile_modules,
             modules,
             mouse_pos,
+            mouse_down: false,
             tile_resolution,
             window_size: (SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32),
             show_grid: true,
@@ -360,7 +446,9 @@ impl EventHandler for Stage {
             let mut wfc_context: WfcContext<CustomBitSet> = WfcContext::new(
                 &self.modules,
                 WIDTH,
-                HEIGHT
+                HEIGHT,
+                DefaultEntropyHeuristic::default(),
+                DefaultEntropyChoiceHeuristic::default()
             );
 
             self.tile_modules = wfc_context
@@ -385,34 +473,43 @@ impl EventHandler for Stage {
         }
         while !self.draw_queue.is_empty() {
             let (next_row, next_column, tool) = self.draw_queue.pop_front().unwrap();
-            let mut wfc_context: WfcContext<CustomBitSet> = WfcContext::from_existing_collapse(
+            let mut preferable_bits = CustomBitSet::empty();
+            let tool_tile = match tool {
+                GRASS => 4,
+                ROAD => 28,
+                SAND => 52,
+                SAVANNAH => 76,
+                HIGH_ROCKS => 100,
+                MOUNTAIN => 172,
+                WATER => 196,
+                DIRT_2 => 220,
+                _ => 13
+            };
+            if tool != DIRT {
+                let offset = tool_tile - 4;
+                for ix in 0..24 {
+                    preferable_bits.set(offset + ix);
+                }
+            }
+            let mut wfc_context = WfcContext::from_existing_collapse(
                 &self.modules,
                 WIDTH,
                 HEIGHT,
+                LeastDistanceHeuristic{ row: next_row, column: next_column},
+                DrawingChoiceHeuristic{
+                    fallback: DefaultEntropyChoiceHeuristic::default(),
+                    preferable_bits
+                },
                 &self.tile_modules
             );
 
-            match wfc_context.local_collapse(
-                next_row,
-                next_column,
-                match tool {
-                    GRASS => 4,
-                    ROAD => 28,
-                    SAND => 52,
-                    SAVANNAH => 76,
-                    HIGH_ROCKS => 100,
-                    MOUNTAIN => 172,
-                    WATER => 196,
-                    DIRT_2 => 220,
-                    _ => 13
-                }
-            ) {
+            match wfc_context.local_collapse(next_row, next_column, tool_tile) {
                 Ok(new_tile_modules) => {
-                    self.tile_modules = new_tile_modules;
                     for idx in 0..self.tile_modules.len() {
                         let row = idx / WIDTH;
                         let column = idx % WIDTH;
-                        let tile_id = self.tile_modules[idx];
+                        if self.tile_modules[idx] == new_tile_modules[idx] { continue; }
+                        let tile_id = new_tile_modules[idx];
                         let tile_info = &self.tiles[tile_id];
                         BlitBuilder::try_create(&mut self.stage_surface, &self.atlas)
                             .expect("failed to create blit builder")
@@ -420,6 +517,7 @@ impl EventHandler for Stage {
                             .with_dest_pos(column as i32 * 32, row as i32 * 32)
                             .blit();
                     }
+                    self.tile_modules = new_tile_modules;
                 }
                 Err(_) => {}
             }
@@ -460,7 +558,22 @@ impl EventHandler for Stage {
             (x / ctx.dpi_scale() / self.window_size.0 * WIDTH as f32).trunc(),
             (y / ctx.dpi_scale() / self.window_size.1 * HEIGHT as f32).trunc()
         );
-        println!("({}, {})", self.mouse_pos.0, self.mouse_pos.1);
+        if self.mouse_down {
+            self.enqueue_draw();
+        }
+    }
+
+    fn mouse_button_down_event(
+        &mut self,
+        _ctx: &mut Context,
+        button: MouseButton,
+        _x: f32,
+        _y: f32,
+    ) {
+        if let MouseButton::Left = button {
+            self.mouse_down = true;
+            self.enqueue_draw();
+        }
     }
 
     fn mouse_button_up_event(
@@ -470,19 +583,8 @@ impl EventHandler for Stage {
         _x: f32,
         _y: f32,
     ) {
-        let row = self.mouse_pos.1 as usize;
-        let column = self.mouse_pos.0 as usize;
-        if self.draw_queue.is_empty() {
-            self.draw_queue.push_back((row, column, self.current_tool));
-        } else {
-            let mut last = self.draw_queue.pop_back().unwrap();
-            if last.0 == row && last.1 == column {
-                last.2 = self.current_tool;
-                self.draw_queue.push_back(last);
-            } else {
-                self.draw_queue.push_back(last);
-                self.draw_queue.push_back((row, column, self.current_tool))
-            }
+        if let MouseButton::Left = button {
+            self.mouse_down = false;
         }
     }
 
@@ -504,6 +606,7 @@ impl EventHandler for Stage {
         }
     }
 }
+
 
 mod shader {
     use miniquad::*;
@@ -586,4 +689,25 @@ fn main() {
     }, |mut ctx| {
         UserData::owning(Stage::new(&mut ctx), ctx)
     });
+}
+
+impl Stage {
+    fn enqueue_draw(&mut self) {
+        let row = self.mouse_pos.1 as usize;
+        let column = self.mouse_pos.0 as usize;
+        if self.draw_queue.is_empty() {
+            self.draw_queue.push_back((row, column, self.current_tool));
+        } else {
+            let mut last = self.draw_queue.pop_back().unwrap();
+            if last.0 == row && last.1 == column {
+                if last.2 != self.current_tool {
+                    last.2 = self.current_tool;
+                }
+                self.draw_queue.push_back(last);
+            } else {
+                self.draw_queue.push_back(last);
+                self.draw_queue.push_back((row, column, self.current_tool))
+            }
+        }
+    }
 }
