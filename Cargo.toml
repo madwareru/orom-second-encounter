@@ -20,7 +20,7 @@ rom-loaders-rs = { git = "https://github.com/madwareru/rom-loaders-rs", version 
 miniquad = "0.3.0-alpha.30"
 bytemuck = "1.4.1"
 bitsetium = "0.0.0"
-simple-tiled-wfc = { version = "0.1.0", git = "https://github.com/madwareru/simple-tiled-wfc.git" }
+simple-tiled-wfc = { version = "0.2.6", git = "https://github.com/madwareru/simple-tiled-wfc.git" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
