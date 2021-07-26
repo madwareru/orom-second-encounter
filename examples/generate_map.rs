@@ -579,7 +579,7 @@ impl EventHandler for Stage {
     fn mouse_button_up_event(
         &mut self,
         _ctx: &mut Context,
-        _button: MouseButton,
+        button: MouseButton,
         _x: f32,
         _y: f32,
     ) {
