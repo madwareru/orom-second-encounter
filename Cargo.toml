@@ -17,8 +17,10 @@ long_description = ""
 rom-res-rs = { git = "https://github.com/madwareru/rom-res-rs", version = "0.1.9"}
 rom-media-rs = { git = "https://github.com/madwareru/rom-media-rs", version = "0.6.32" }
 rom-loaders-rs = { git = "https://github.com/madwareru/rom-loaders-rs", version = "0.4.28"}
-simple-tiled-wfc = {git = "https://github.com/madwareru/simple-tiled-wfc.git", version = "0.4.7" }
+simple-tiled-wfc = {git = "https://github.com/madwareru/simple-tiled-wfc.git", version = "0.5.5" }
 rand = "0.7"
 miniquad = "0.3.0-alpha.30"
 bytemuck = "1.4.1"
 bitsetium = "0.0.0"
+egui-miniquad = "0.5.0"
+egui = "0.13.0"
