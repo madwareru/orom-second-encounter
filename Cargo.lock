@@ -400,8 +400,8 @@ dependencies = [
 
 [[package]]
 name = "rom-media-rs"
-version = "0.6.26"
-source = "git+https://github.com/madwareru/rom-media-rs#3b0377af3da989487b31db7a866adda20b8a9f80"
+version = "0.6.32"
+source = "git+https://github.com/madwareru/rom-media-rs#f0fda7336bb8c2c93276e330ff1656ef345d8a17"
 dependencies = [
  "cpal",
  "rom-loaders-rs",
@@ -496,8 +496,8 @@ checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
 
 [[package]]
 name = "simple-tiled-wfc"
-version = "0.4.5"
-source = "git+https://github.com/madwareru/simple-tiled-wfc.git#067b915bc119e238ab3945f445fbfc68a3ccb651"
+version = "0.4.7"
+source = "git+https://github.com/madwareru/simple-tiled-wfc.git#62b07709657cd52655feaf949173aa2b354713db"
 dependencies = [
  "bitsetium",
  "rand",

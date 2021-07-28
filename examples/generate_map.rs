@@ -1,5 +1,5 @@
 use miniquad::*;
-use rom_media_rs::image_rendering::bmp_sprite_decorators::TrueColorSurfaceSprite;
+use rom_media_rs::image_rendering::bmp_sprite_decorators::{TrueColorSurfaceSprite, FastBlended};
 use rom_media_rs::image_rendering::blittable::{Blittable, BlitBuilder};
 use std::io::Cursor;
 use rom_res_rs::ResourceFile;
@@ -143,6 +143,7 @@ struct Stage {
     pipeline: Pipeline,
     bindings: Bindings,
     atlas: TrueColorSurfaceSprite,
+    black_square: TrueColorSurfaceSprite,
     stage_surface: TrueColorSurfaceSprite,
     tiles: Vec<TileInfo>,
     modules: Vec<WfcModule<CustomBitSet>>,
@@ -153,6 +154,8 @@ struct Stage {
     tile_modules: Vec<usize>,
     show_grid: bool,
     should_update: bool,
+    should_update_iteratively: bool,
+    update_history: VecDeque<(usize, CustomBitSet)>,
     mouse_down: bool,
     draw_queue: VecDeque<(usize, usize, u8)>
 }
@@ -196,6 +199,7 @@ impl Stage {
             }
         }
         let mut atlas = TrueColorSurfaceSprite::new(1024, 1024);
+        let black_square = TrueColorSurfaceSprite::new(32, 32);
         let mut stage_surface = TrueColorSurfaceSprite::new(SCREEN_WIDTH as usize, SCREEN_HEIGHT as usize);
 
         let tile_definitions = &[
@@ -363,7 +367,7 @@ impl Stage {
 
         let tile_modules = wfc_context
             .collapse(100)
-            .unwrap_or(vec![4; WIDTH * HEIGHT]);
+            .unwrap_or_else(|_| vec![4; WIDTH * HEIGHT]);
 
         for idx in 0..tile_modules.len() {
             let row = idx / WIDTH;
@@ -424,6 +428,7 @@ impl Stage {
             pipeline,
             bindings,
             atlas,
+            black_square,
             stage_surface,
             tiles,
             tile_modules,
@@ -435,14 +440,89 @@ impl Stage {
             show_grid: true,
             current_tool: GRASS,
             should_update: false,
+            should_update_iteratively: false,
+            update_history: VecDeque::new(),
             draw_queue: VecDeque::new()
+        }
+    }
+
+    fn enqueue_draw(&mut self) {
+        let row = self.mouse_pos.1 as usize;
+        let column = self.mouse_pos.0 as usize;
+        if self.draw_queue.is_empty() {
+            self.draw_queue.push_back((row, column, self.current_tool));
+        } else {
+            let mut last = self.draw_queue.pop_back().unwrap();
+            if last.0 == row && last.1 == column {
+                if last.2 != self.current_tool {
+                    last.2 = self.current_tool;
+                }
+                self.draw_queue.push_back(last);
+            } else {
+                self.draw_queue.push_back(last);
+                self.draw_queue.push_back((row, column, self.current_tool))
+            }
         }
     }
 }
 
 impl EventHandler for Stage {
     fn update(&mut self, ctx: &mut Context) {
-        if self.should_update {
+        if !self.update_history.is_empty() {
+            let mut steps_per_iteration = 10;
+            let alpha_blended = FastBlended { decorated: &self.atlas };
+            while steps_per_iteration > 0 && !self.update_history.is_empty() {
+                let (next_idx, next_prop) = self.update_history.pop_front().unwrap();
+                let row = next_idx / WIDTH;
+                let column = next_idx % WIDTH;
+                if get_bits_set_count(&next_prop) == 1 {
+                    let tile_id = next_prop.find_first_set(0).unwrap();
+                    let tile_info = &self.tiles[tile_id];
+                    BlitBuilder::try_create(&mut self.stage_surface, &self.atlas)
+                        .expect("failed to create blit builder")
+                        .with_source_subrect(tile_info.tile_x, tile_info.tile_y, 32, 32)
+                        .with_dest_pos(column as i32 * 32, row as i32 * 32)
+                        .blit();
+                } else {
+                    BlitBuilder::try_create(
+                        &mut self.stage_surface,
+                        &self.black_square
+                    )
+                        .expect("failed to create blit builder")
+                        .with_dest_pos(column as i32 * 32, row as i32 * 32)
+                        .blit();
+
+                    for tile_id in BitsIterator::new(&next_prop) {
+                        BlitBuilder::try_create(
+                            &mut self.stage_surface,
+                            &alpha_blended
+                        )
+                            .expect("failed to create blit builder")
+                            .with_source_subrect(self.tiles[tile_id].tile_x, self.tiles[tile_id].tile_y, 32, 32)
+                            .with_dest_pos(column as i32 * 32, row as i32 * 32)
+                            .blit();
+                    }
+                }
+                steps_per_iteration -= 1;
+            }
+            if self.update_history.is_empty() {
+                for idx in 0..self.tile_modules.len() {
+                    let row = idx / WIDTH;
+                    let column = idx % WIDTH;
+                    let tile_id = self.tile_modules[idx];
+                    let tile_info = &self.tiles[tile_id];
+                    BlitBuilder::try_create(&mut self.stage_surface, &self.atlas)
+                        .expect("failed to create blit builder")
+                        .with_source_subrect(tile_info.tile_x, tile_info.tile_y, 32, 32)
+                        .with_dest_pos(column as i32 * 32, row as i32 * 32)
+                        .blit();
+                }
+            }
+            let casted = bytemuck::cast_slice(self.stage_surface.color_data());
+            self.bindings.images[0].update(ctx, casted);
+            return; //while we are showing a traversing we don't want anything else to be done
+        }
+        if self.should_update_iteratively || self.should_update {
             let mut wfc_context: WfcContext<CustomBitSet> = WfcContext::new(
                 &self.modules,
                 WIDTH,
@@ -451,25 +531,34 @@ impl EventHandler for Stage {
                 DefaultEntropyChoiceHeuristic::default()
             );
 
-            self.tile_modules = wfc_context
-                .collapse(10)
-                .unwrap_or(vec![4; WIDTH * HEIGHT]);
+            let res = wfc_context.collapse(10);
 
-            for idx in 0..self.tile_modules.len() {
-                let row = idx / WIDTH;
-                let column = idx % WIDTH;
-                let tile_id = self.tile_modules[idx];
-                let tile_info = &self.tiles[tile_id];
-                BlitBuilder::try_create(&mut self.stage_surface, &self.atlas)
-                    .expect("failed to create blit builder")
-                    .with_source_subrect(tile_info.tile_x, tile_info.tile_y, 32, 32)
-                    .with_dest_pos(column as i32 * 32, row as i32 * 32)
-                    .blit();
+            if self.should_update {
+                if res.is_ok(){
+                    self.tile_modules = res.unwrap_or_else(|_| vec![4; WIDTH * HEIGHT]);
+                    for idx in 0..self.tile_modules.len() {
+                        let row = idx / WIDTH;
+                        let column = idx % WIDTH;
+                        let tile_id = self.tile_modules[idx];
+                        let tile_info = &self.tiles[tile_id];
+                        BlitBuilder::try_create(&mut self.stage_surface, &self.atlas)
+                            .expect("failed to create blit builder")
+                            .with_source_subrect(tile_info.tile_x, tile_info.tile_y, 32, 32)
+                            .with_dest_pos(column as i32 * 32, row as i32 * 32)
+                            .blit();
+                    }
+
+                    let casted = bytemuck::cast_slice(self.stage_surface.color_data());
+                    self.bindings.images[0].update(ctx, casted);
+                }
+            } else {
+                if res.is_ok() {
+                    self.tile_modules = res.unwrap_or_else(|_| vec![4; WIDTH * HEIGHT]);
+                    self.update_history = wfc_context.become_history();
+                }
             }
-
-            let casted = bytemuck::cast_slice(self.stage_surface.color_data());
-            self.bindings.images[0].update(ctx, casted);
             self.should_update = false;
+            self.should_update_iteratively = false;
         }
         while !self.draw_queue.is_empty() {
             let (next_row, next_column, tool) = self.draw_queue.pop_front().unwrap();
@@ -518,7 +607,7 @@ impl EventHandler for Stage {
                             .blit();
                     }
                     self.tile_modules = new_tile_modules;
-                }
+                },
                 Err(_) => {}
             }
         }
@@ -588,7 +677,7 @@ impl EventHandler for Stage {
         }
     }
 
-    fn key_up_event(&mut self, ctx: &mut Context, keycode: KeyCode, _keymods: KeyMods) {
+    fn key_up_event(&mut self, ctx: &mut Context, keycode: KeyCode, keymods: KeyMods) {
         match keycode {
             KeyCode::Key0 => self.current_tool = DIRT,
             KeyCode::Key1 => self.current_tool = GRASS,
@@ -600,7 +689,13 @@ impl EventHandler for Stage {
             KeyCode::Key7 => self.current_tool = WATER,
             KeyCode::Key8 => self.current_tool = DIRT_2,
             KeyCode::Space => self.show_grid = !self.show_grid,
-            KeyCode::Enter =>  self.should_update = true,
+            KeyCode::Enter => {
+                if keymods.shift {
+                    self.should_update_iteratively = true;
+                } else {
+                    self.should_update = true
+                }
+            },
             KeyCode::Escape =>  ctx.quit(),
             _ => {}
         }
@@ -689,25 +784,4 @@ fn main() {
     }, |mut ctx| {
         UserData::owning(Stage::new(&mut ctx), ctx)
     });
-}
-
-impl Stage {
-    fn enqueue_draw(&mut self) {
-        let row = self.mouse_pos.1 as usize;
-        let column = self.mouse_pos.0 as usize;
-        if self.draw_queue.is_empty() {
-            self.draw_queue.push_back((row, column, self.current_tool));
-        } else {
-            let mut last = self.draw_queue.pop_back().unwrap();
-            if last.0 == row && last.1 == column {
-                if last.2 != self.current_tool {
-                    last.2 = self.current_tool;
-                }
-                self.draw_queue.push_back(last);
-            } else {
-                self.draw_queue.push_back(last);
-                self.draw_queue.push_back((row, column, self.current_tool))
-            }
-        }
-    }
 }
