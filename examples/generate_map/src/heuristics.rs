@@ -4,8 +4,9 @@ use std::hash::Hash;
 use simple_tiled_wfc::{get_bits_set_count, BitsIterator};
 use rand::{thread_rng, Rng};
 
-pub const fn manhattan(x1: usize, y1: usize, x2: usize, y2: usize) -> usize {
-    (x1 as i64 - x2 as i64).abs() as usize + (y1 as i64 - y2 as i64).abs() as usize
+pub fn square_dist(x1: usize, y1: usize, x2: usize, y2: usize) -> f64 {
+    (x2 as f64 - x1 as f64) * (x2 as f64 - x1 as f64) +
+        (y2 as f64 - y1 as f64) * (y2 as f64 - y1 as f64)
 }
 
 pub struct LeastDistanceHeuristic {
@@ -26,12 +27,12 @@ impl<TBitSet> WfcEntropyHeuristic<TBitSet> for LeastDistanceHeuristic
         _modules: &[WfcModule<TBitSet>],
         available_indices: &[usize]
     ) -> usize {
-        let (mut min_id, mut min_distance) = (available_indices.len() - 1, usize::MAX);
+        let (mut min_id, mut min_distance) = (available_indices.len() - 1, f64::MAX);
         for i in 0..available_indices.len() {
             let idx = available_indices[i];
             let row = idx / width;
             let column = idx % width;
-            let d = manhattan(self.row, self.column, row, column);
+            let d = square_dist(self.row, self.column, row, column);
             if d < min_distance {
                 min_id = i;
                 min_distance = d;

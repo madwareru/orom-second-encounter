@@ -5,12 +5,10 @@ pub const TILEMAP_VERTEX: &str = //language=glsl
     attribute vec2 pos;
     attribute vec2 uv;
 
-    uniform vec2 offset;
-
     varying lowp vec2 texcoord;
 
     void main() {
-        gl_Position = vec4(pos + offset, 0, 1);
+        gl_Position = vec4(pos, 0, 1);
         texcoord = uv;
     }"#;
 
@@ -42,12 +40,39 @@ pub const TILEMAP_FRAGMENT: &str = //language=glsl
         gl_FragColor = vec4(clamp(color, vec3(0.0), vec3(1.0)), 1.0);
     }"#;
 
+pub const TEXT_RENDER_VERTEX: &str = //language=glsl
+    r#"#version 100
+    attribute vec2 pos;
+    attribute vec2 uv;
+
+    varying lowp vec2 texcoord;
+
+    uniform lowp vec2 offset;
+    uniform lowp vec2 scale;
+
+    void main() {
+        gl_Position = vec4(pos * scale + offset, 0.0, 1.0);
+        texcoord = uv;
+    }"#;
+
+pub const TEXT_RENDER_FRAGMENT: &str = //language=glsl
+    r#"#version 100
+    varying lowp vec2 texcoord;
+
+    uniform sampler2D tex;
+
+    uniform lowp vec3 font_color;
+
+    void main() {
+        lowp vec4 clr = texture2D(tex, texcoord).xxxx;
+        gl_FragColor = vec4(clr.xxx * font_color, clr.x);
+    }"#;
+
 pub fn tilemap_meta() -> ShaderMeta {
     ShaderMeta {
         images: vec!["tex".to_string()],
         uniforms: UniformBlockLayout {
             uniforms: vec![
-                UniformDesc::new("offset", UniformType::Float2),
                 UniformDesc::new("mouse_pos", UniformType::Float2),
                 UniformDesc::new("tile_resolution", UniformType::Float2),
                 UniformDesc::new("grid_color", UniformType::Float3),
@@ -59,9 +84,28 @@ pub fn tilemap_meta() -> ShaderMeta {
 
 #[repr(C)]
 pub struct TilemapUniforms {
-    pub offset: (f32, f32),
     pub mouse_pos: (f32, f32),
     pub tile_resolution: (f32, f32),
     pub grid_color: (f32, f32, f32),
     pub tool_color: (f32, f32, f32),
+}
+
+pub fn info_text_meta() -> ShaderMeta {
+    ShaderMeta {
+        images: vec!["tex".to_string()],
+        uniforms: UniformBlockLayout {
+            uniforms: vec![
+                UniformDesc::new("offset", UniformType::Float2),
+                UniformDesc::new("scale", UniformType::Float2),
+                UniformDesc::new("font_color", UniformType::Float3),
+            ],
+        },
+    }
+}
+
+#[repr(C)]
+pub struct InfoTextUniforms {
+    pub pos: (f32, f32),
+    pub scale: (f32, f32),
+    pub font_color: (f32, f32, f32)
 }

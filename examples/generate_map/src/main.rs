@@ -49,18 +49,20 @@ struct Surfaces {
 
 struct Stage {
     egui: EguiMq,
-    bindings: Bindings,
+    tilemap_bindings: Bindings,
     tilemap_pipeline: Pipeline,
+    info_text_bindings: Bindings,
+    info_text_pipeline: Pipeline,
     surfaces: Surfaces,
     terrain_gui_textures: Vec<Texture>,
     tiles: Vec<TileInfo>,
     modules: Vec<WfcModule<CustomBitSet>>,
     tile_selection: (usize, usize),
     tile_resolution: (f32, f32),
-    window_size: (f32, f32),
     current_tool: u8,
     tile_modules: Vec<usize>,
     show_grid: bool,
+    show_ui: bool,
     should_update: bool,
     should_update_iteratively: bool,
     iterative_results_receiver: Receiver<(usize, CustomBitSet)>,
@@ -122,33 +124,40 @@ impl Stage {
             (stage_surface, tile_modules)
         };
 
-        let texture = {
-            let casted = bytemuck::cast_slice(stage_surface.color_data());
-            Texture::from_data_and_format(
-                ctx,
-                &casted,
-                TextureParams {
-                    format: TextureFormat::RGBA8,
-                    wrap: TextureWrap::Clamp,
-                    filter: FilterMode::Linear,
-                    width: stage_surface.get_width() as u32,
-                    height: stage_surface.get_height() as u32
-                }
-            )
-        };
         let terrain_gui_textures = load_gui_textures(ctx);
 
-        let vertex_buffer = Buffer::immutable(ctx, BufferType::VertexBuffer, &VERTICES);
-        let index_buffer = Buffer::immutable(ctx, BufferType::IndexBuffer, &[0u16, 1, 2, 0, 2, 3]);
+        let tilemap_bindings = {
+            let texture = {
+                let casted = bytemuck::cast_slice(stage_surface.color_data());
+                Texture::from_data_and_format(
+                    ctx,
+                    &casted,
+                    TextureParams {
+                        format: TextureFormat::RGBA8,
+                        wrap: TextureWrap::Clamp,
+                        filter: FilterMode::Linear,
+                        width: stage_surface.get_width() as u32,
+                        height: stage_surface.get_height() as u32
+                    }
+                )
+            };
 
-        let bindings = Bindings {
-            vertex_buffers: vec![vertex_buffer],
-            index_buffer,
-            images: vec![texture],
+            let vertex_buffer = Buffer::immutable(ctx, BufferType::VertexBuffer, &VERTICES);
+            let index_buffer = Buffer::immutable(ctx, BufferType::IndexBuffer, &[0u16, 1, 2, 0, 2, 3]);
+            Bindings {
+                vertex_buffers: vec![vertex_buffer],
+                index_buffer,
+                images: vec![texture],
+            }
         };
 
-        let pipeline = {
-            let shader = Shader::new(ctx, shaders::TILEMAP_VERTEX, shaders::TILEMAP_FRAGMENT, shaders::tilemap_meta()).unwrap();
+        let tilemap_pipeline = {
+            let shader = Shader::new(
+                ctx,
+                shaders::TILEMAP_VERTEX,
+                shaders::TILEMAP_FRAGMENT,
+                shaders::tilemap_meta()
+            ).unwrap();
 
             Pipeline::new(
                 ctx,
@@ -161,10 +170,49 @@ impl Stage {
             )
         };
 
+        let info_text_bindings = {
+            let texture = load_info_text_texture(ctx);
+
+            let vertex_buffer = Buffer::immutable(ctx, BufferType::VertexBuffer, &VERTICES);
+            let index_buffer = Buffer::immutable(ctx, BufferType::IndexBuffer, &[0u16, 1, 2, 0, 2, 3]);
+            Bindings {
+                vertex_buffers: vec![vertex_buffer],
+                index_buffer,
+                images: vec![texture],
+            }
+        };
+
+        let info_text_pipeline = {
+            let shader = Shader::new(
+                ctx,
+                shaders::TEXT_RENDER_VERTEX,
+                shaders::TEXT_RENDER_FRAGMENT,
+                shaders::info_text_meta()
+            ).unwrap();
+
+            Pipeline::with_params(
+                ctx,
+                &[BufferLayout::default()],
+                &[
+                    VertexAttribute::new("pos", VertexFormat::Float2),
+                    VertexAttribute::new("uv", VertexFormat::Float2),
+                ],
+                shader,
+                PipelineParams {
+                    color_blend: Some(BlendState::new(
+                        Equation::Add,
+                        BlendFactor::One,
+                        BlendFactor::OneMinusValue(BlendValue::SourceAlpha),
+                    )),
+                    ..Default::default()
+                }
+            )
+        };
+
         let egui = EguiMq::new(ctx);
         let mut fonts = FontDefinitions::default();
         fonts.font_data
-            .insert("JetBrains Mono".to_owned(), std::borrow::Cow::Borrowed(JETBRAIN_MONO_FONT));
+            .insert("JetBrains Mono".to_owned(), std::borrow::Cow::Borrowed(JETBRAINS_MONO_FONT));
         fonts.fonts_for_family
             .get_mut(&FontFamily::Proportional)
             .unwrap()
@@ -176,8 +224,10 @@ impl Stage {
         egui.egui_ctx().set_fonts(fonts);
 
         Stage {
-            bindings,
-            tilemap_pipeline: pipeline,
+            tilemap_bindings,
+            tilemap_pipeline,
+            info_text_bindings,
+            info_text_pipeline,
             surfaces: Surfaces { atlas, black_square, stage_surface},
             terrain_gui_textures,
             tiles,
@@ -186,11 +236,8 @@ impl Stage {
             tile_selection: (0, 0),
             mouse_down: false,
             tile_resolution,
-            window_size: (
-                SCREEN_WIDTH as f32 * ctx.dpi_scale(),
-                SCREEN_HEIGHT as f32 * ctx.dpi_scale()
-            ),
             show_grid: true,
+            show_ui: true,
             current_tool: GRASS,
             should_update: false,
             should_update_iteratively: false,
@@ -225,6 +272,8 @@ impl Stage {
     }
 
     fn ui(&mut self) {
+        if !self.show_ui { return; }
+
         let egui_ctx = self.egui.egui_ctx().clone();
 
         egui::Window::new("general")
@@ -329,22 +378,56 @@ impl EventHandler for Stage {
     }
 
     fn draw(&mut self, ctx: &mut Context) {
-        ctx.begin_default_pass(Default::default());
+        {
+            ctx.begin_default_pass(Default::default());
+            ctx.apply_pipeline(&self.tilemap_pipeline);
+            ctx.apply_bindings(&self.tilemap_bindings);
 
-        ctx.apply_pipeline(&self.tilemap_pipeline);
-        ctx.apply_bindings(&self.bindings);
+            ctx.apply_uniforms(&shaders::TilemapUniforms {
+                mouse_pos: (self.tile_selection.0 as f32, self.tile_selection.1 as f32),
+                tile_resolution: self.tile_resolution,
+                grid_color: if self.show_grid {(0.0, 0.4, 0.7)} else {(0.0, 0.0, 0.0)} ,
+                tool_color: get_tool_color(self.current_tool)
+            });
 
-        ctx.apply_uniforms(&shaders::TilemapUniforms {
-            offset: (0.0, 0.0),
-            mouse_pos: (self.tile_selection.0 as f32, self.tile_selection.1 as f32),
-            tile_resolution: self.tile_resolution,
-            grid_color: if self.show_grid {(0.0, 0.4, 0.7)} else {(0.0, 0.0, 0.0)} ,
-            tool_color: get_tool_color(self.current_tool)
-        });
+            ctx.draw(0, 6, 1);
 
-        ctx.draw(0, 6, 1);
+            ctx.end_render_pass();
+        }
 
-        ctx.end_render_pass();
+        {
+            ctx.begin_default_pass(PassAction::Nothing);
+
+            ctx.apply_pipeline(&self.info_text_pipeline);
+            ctx.apply_bindings(&self.info_text_bindings);
+
+            ctx.apply_uniforms(&shaders::InfoTextUniforms {
+                pos: (0.001, 0.979),
+                scale: (0.1977 * 0.7, 0.034 * 0.7),
+                font_color: (0.15, 0.15, 0.16)
+            });
+
+            ctx.draw(0, 6, 1);
+
+            ctx.end_render_pass();
+        }
+        {
+            ctx.begin_default_pass(PassAction::Nothing);
+
+            ctx.apply_pipeline(&self.info_text_pipeline);
+            ctx.apply_bindings(&self.info_text_bindings);
+
+            ctx.apply_uniforms(&shaders::InfoTextUniforms {
+                pos: (-0.001, 0.981),
+                scale: (0.1977 * 0.7, 0.034 * 0.7),
+                font_color: (0.6, 0.6, 0.62)
+            });
+
+            ctx.draw(0, 6, 1);
+
+            ctx.end_render_pass();
+        }
+
 
         self.egui.begin_frame(ctx);
         self.ui();
@@ -359,18 +442,15 @@ impl EventHandler for Stage {
         ctx.commit_frame();
     }
 
-    fn resize_event(&mut self, _: &mut Context, width: f32, height: f32) {
-        self.window_size = (width, height);
-    }
-
     fn mouse_motion_event(&mut self, ctx: &mut Context, x: f32, y: f32) {
+        let screen_size = ctx.screen_size();
         self.egui.mouse_motion_event(ctx, x, y);
         if !self.egui.egui_ctx().is_pointer_over_area() {
             let tile_selection = (
-                (x / self.window_size.0 * WIDTH as f32)
+                (x / screen_size.0 * WIDTH as f32)
                     .trunc()
                     .max(0.0) as usize,
-                (y / self.window_size.1 * HEIGHT as f32)
+                (y / screen_size.1 * HEIGHT as f32)
                     .trunc()
                     .max(0.0) as usize
             );
@@ -420,8 +500,12 @@ impl EventHandler for Stage {
         }
     }
 
-    fn char_event(&mut self, _ctx: &mut Context, character: char, _keymods: KeyMods, _repeat: bool) {
+    fn char_event(&mut self, _ctx: &mut Context, character: char, _keymods: KeyMods, repeat: bool) {
         self.egui.char_event(character);
+        if self.egui.egui_ctx().wants_keyboard_input() { return; }
+        if character == '~' && !repeat {
+            self.show_ui = !self.show_ui;
+        }
     }
 
     fn key_down_event(&mut self, ctx: &mut Context, keycode: KeyCode, keymods: KeyMods, _repeat: bool) {
@@ -430,7 +514,6 @@ impl EventHandler for Stage {
 
     fn key_up_event(&mut self, ctx: &mut Context, keycode: KeyCode, keymods: KeyMods) {
         self.egui.key_up_event(keycode, keymods);
-        if self.egui.egui_ctx().wants_keyboard_input() { return; }
         match keycode {
             KeyCode::Key1 => self.current_tool = LAND,
             KeyCode::Key2 => self.current_tool = GRASS,
@@ -536,7 +619,7 @@ impl Stage { // Drawing related stuff
             }
         }
         let casted = bytemuck::cast_slice(self.surfaces.stage_surface.color_data());
-        self.bindings.images[0].update(ctx, casted);
+        self.tilemap_bindings.images[0].update(ctx, casted);
     }
 
     fn initiate_iterative_collapse(&mut self) {
@@ -545,12 +628,11 @@ impl Stage { // Drawing related stuff
 
         let tx1 = self.iterative_results_transmitter.clone();
         let tx2 = self.compound_results_transmitter.clone();
-        let mdls = self.modules.clone();
+        let modules = self.modules.clone();
 
         thread::spawn(move || {
-            let mdls = mdls;
             let mut wfc_context: WfcContext<CustomBitSet> = WfcContext::new(
-                &mdls,
+                &modules,
                 WIDTH,
                 HEIGHT,
                 DefaultEntropyHeuristic::default(),
@@ -573,10 +655,8 @@ impl Stage { // Drawing related stuff
         );
 
         wfc_context.collapse(10, self.compound_results_transmitter.clone());
-
-        let res = self.compound_results_receiver.recv().unwrap();
-        if res.is_ok() {
-            self.tile_modules = res.unwrap_or_else(|_| vec![4; WIDTH * HEIGHT]);
+        if let Ok(tile_modules) = self.compound_results_receiver.recv().unwrap() {
+            self.tile_modules = tile_modules;
             for idx in 0..self.tile_modules.len() {
                 let row = idx / WIDTH;
                 let column = idx % WIDTH;
@@ -590,7 +670,7 @@ impl Stage { // Drawing related stuff
             }
 
             let casted = bytemuck::cast_slice(self.surfaces.stage_surface.color_data());
-            self.bindings.images[0].update(ctx, casted);
+            self.tilemap_bindings.images[0].update(ctx, casted);
         }
         self.should_update = false;
     }
@@ -636,27 +716,24 @@ impl Stage { // Drawing related stuff
                 self.compound_results_transmitter.clone()
             );
 
-            match self.compound_results_receiver.recv().unwrap() {
-                Ok(new_tile_modules) => {
-                    for idx in 0..self.tile_modules.len() {
-                        let row = idx / WIDTH;
-                        let column = idx % WIDTH;
-                        if self.tile_modules[idx] == new_tile_modules[idx] { continue; }
-                        let tile_id = new_tile_modules[idx];
-                        let tile_info = &self.tiles[tile_id];
-                        BlitBuilder::try_create(&mut self.surfaces.stage_surface, &self.surfaces.atlas)
-                            .expect("failed to create blit builder")
-                            .with_source_subrect(tile_info.tile_x, tile_info.tile_y, 32, 32)
-                            .with_dest_pos(column as i32 * 32, row as i32 * 32)
-                            .blit();
-                    }
-                    self.tile_modules = new_tile_modules;
-                },
-                Err(_) => {}
+            if let Ok(new_tile_modules) = self.compound_results_receiver.recv().unwrap() {
+                for idx in 0..new_tile_modules.len() {
+                    let row = idx / WIDTH;
+                    let column = idx % WIDTH;
+                    if self.tile_modules[idx] == new_tile_modules[idx] { continue; }
+                    let tile_id = new_tile_modules[idx];
+                    let tile_info = &self.tiles[tile_id];
+                    BlitBuilder::try_create(&mut self.surfaces.stage_surface, &self.surfaces.atlas)
+                        .expect("failed to create blit builder")
+                        .with_source_subrect(tile_info.tile_x, tile_info.tile_y, 32, 32)
+                        .with_dest_pos(column as i32 * 32, row as i32 * 32)
+                        .blit();
+                }
+                self.tile_modules = new_tile_modules;
             }
         }
 
         let casted = bytemuck::cast_slice(self.surfaces.stage_surface.color_data());
-        self.bindings.images[0].update(ctx, casted);
+        self.tilemap_bindings.images[0].update(ctx, casted);
     }
 }
