@@ -10,7 +10,7 @@ pub const GUI_TEXTURE_BYTES: &[&[u8]] = &[
     include_bytes!("../../assets/water.bmp"),
     include_bytes!("../../assets/road.bmp")
 ];
-pub const INFO_TEXT_BYTES: &[u8] = include_bytes!("../../assets/info_text.png");
+pub const INFO_TEXT_BYTES: &[u8] = include_bytes!("../../assets/info_text.bmp");
 pub const JETBRAINS_MONO_FONT: &[u8] = include_bytes!("../../assets/JetBrainsMono-Medium.ttf");
 
 pub const LAND: u8 = 0;

@@ -85,19 +85,27 @@ pub fn load_gui_textures(ctx: &mut Context) -> Vec<Texture> {
 
 pub fn load_info_text_texture(ctx: &mut Context) -> Texture {
     let mut cursor = Cursor::new(INFO_TEXT_BYTES);
-    let decoder = png::Decoder::new(cursor);
-    let (info, mut reader) = decoder.read_info().unwrap();
-    let mut buf = vec![0; info.buffer_size()];
-    reader.next_frame(&mut buf).unwrap();
-    Texture::from_data_and_format(
-        ctx,
-        &buf,
-        TextureParams {
-            format: TextureFormat::RGB8,
-            wrap: TextureWrap::Clamp,
-            filter: FilterMode::Linear,
-            width: info.width,
-            height: info.height
+    let sprite = BmpSprite::read_from(&mut cursor).unwrap();
+    match sprite {
+        BmpSprite::TrueColor { width, height, colors } => {
+            let casted = bytemuck::cast_slice(&colors);
+            let mut bytes = Vec::with_capacity(width*height);
+            for offset in 0..width*height {
+                let offset = offset * 4;
+                bytes.push(casted[offset]);
+            }
+            Texture::from_data_and_format(
+                ctx,
+                &bytes,
+                TextureParams {
+                    format: TextureFormat::Alpha,
+                    wrap: TextureWrap::Clamp,
+                    filter: FilterMode::Linear,
+                    width: width as u32,
+                    height: height as u32
+                }
+            )
         }
-    )
+        _ => unreachable!()
+    }
 }
