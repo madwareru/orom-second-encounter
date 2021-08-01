@@ -780,8 +780,8 @@ checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
 
 [[package]]
 name = "simple-tiled-wfc"
-version = "0.5.11"
-source = "git+https://github.com/madwareru/simple-tiled-wfc.git#0fda73bd6a968b6d4218d63ded1f91df7025360f"
+version = "0.6.0"
+source = "git+https://github.com/madwareru/simple-tiled-wfc.git#bd31e374387994435646a8fe29a2e768e6de5749"
 dependencies = [
  "bitsetium",
  "rand",

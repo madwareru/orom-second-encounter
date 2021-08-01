@@ -291,12 +291,12 @@ impl Stage {
                     ui.vertical_centered_justified(|ui| {
                         if ui.button("Collapse").clicked() {
                             self.command_queue.push_back(
-                                GeneralCommand::Collapse(self.available_tiles.make_bitset(&self.tiles))
+                                GeneralCommand::Collapse(self.available_tiles.make_bitset())
                             );
                         }
                         if ui.button("Collapse iteratively").clicked() {
                             self.command_queue.push_back(
-                                GeneralCommand::CollapseIteratively(self.available_tiles.make_bitset(&self.tiles))
+                                GeneralCommand::CollapseIteratively(self.available_tiles.make_bitset())
                             );
                         }
                         ui.separator();
@@ -733,15 +733,15 @@ impl Stage { // Drawing related stuff
         let modules = self.modules.clone();
 
         thread::spawn(move || {
-            let mut wfc_context: WfcContext<CustomBitSet, DefaultEntropyHeuristic, DrawingChoiceHeuristic<CustomBitSet>> = WfcContext::new(
+            let mut wfc_context: WfcContext<CustomBitSet,
+                DefaultEntropyHeuristic,
+                StrictDrawingChoiceHeuristic<CustomBitSet>
+            > = WfcContext::new(
                 &modules,
                 WIDTH,
                 HEIGHT,
                 DefaultEntropyHeuristic::default(),
-                DrawingChoiceHeuristic {
-                    fallback: Default::default(),
-                    preferable_bits: tileset
-                },
+                StrictDrawingChoiceHeuristic { preferable_bits: tileset },
                 Some(tx1)
             );
 
@@ -750,13 +750,15 @@ impl Stage { // Drawing related stuff
     }
 
     fn collapse(&mut self, ctx: &mut Context, tileset: CustomBitSet) {
-        let mut wfc_context: WfcContext<CustomBitSet, DefaultEntropyHeuristic, DrawingChoiceHeuristic<CustomBitSet>> = WfcContext::new(
+        let mut wfc_context: WfcContext<CustomBitSet,
+            DefaultEntropyHeuristic,
+            StrictDrawingChoiceHeuristic<CustomBitSet>
+        > = WfcContext::new(
             &self.modules,
             WIDTH,
             HEIGHT,
             DefaultEntropyHeuristic::default(),
-            DrawingChoiceHeuristic {
-                fallback: Default::default(),
+            StrictDrawingChoiceHeuristic {
                 preferable_bits: tileset
             },
             None

@@ -65,15 +65,50 @@ impl<TBitSet> WfcEntropyChoiceHeuristic<TBitSet> for DrawingChoiceHeuristic<TBit
         column: usize,
         modules: &[WfcModule<TBitSet>],
         slot_bits: &TBitSet
-    ) -> usize {
+    ) -> Option<usize> {
         let intersection = self.preferable_bits.intersection(*slot_bits);
         if get_bits_set_count(&intersection) > 0 {
             let mut rng = thread_rng();
             let random_bit_id = rng.gen_range(0, get_bits_set_count(&intersection));
             let mut iterator = BitsIterator::new(&intersection);
-            iterator.nth(random_bit_id).unwrap()
+            Some(iterator.nth(random_bit_id).unwrap())
         } else {
             self.fallback.choose_least_entropy_bit(width, height, row, column, modules, slot_bits)
+        }
+    }
+}
+
+pub struct StrictDrawingChoiceHeuristic<TBitSet>
+    where TBitSet:
+    BitSearch + BitEmpty + BitSet + BitIntersection +
+    BitUnion + BitTestNone + Hash + Eq + Copy + BitIntersection<Output = TBitSet> +
+    BitUnion<Output = TBitSet>
+{
+    pub preferable_bits: TBitSet
+}
+impl<TBitSet> WfcEntropyChoiceHeuristic<TBitSet> for StrictDrawingChoiceHeuristic<TBitSet>
+    where TBitSet:
+    BitSearch + BitEmpty + BitSet + BitIntersection +
+    BitUnion + BitTestNone + Hash + Eq + Copy + BitIntersection<Output = TBitSet> +
+    BitUnion<Output = TBitSet>
+{
+    fn choose_least_entropy_bit(
+        &self,
+        _width: usize,
+        _height: usize,
+        _row: usize,
+        _column: usize,
+        _modules: &[WfcModule<TBitSet>],
+        slot_bits: &TBitSet
+    ) -> Option<usize> {
+        let intersection = self.preferable_bits.intersection(*slot_bits);
+        if get_bits_set_count(&intersection) > 0 {
+            let mut rng = thread_rng();
+            let random_bit_id = rng.gen_range(0, get_bits_set_count(&intersection));
+            let mut iterator = BitsIterator::new(&intersection);
+            Some(iterator.nth(random_bit_id).unwrap())
+        } else {
+            None
         }
     }
 }

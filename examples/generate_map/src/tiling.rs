@@ -32,47 +32,36 @@ impl Default for AvailableTiles {
 }
 
 impl AvailableTiles {
-    pub fn make_bitset(&self, tiles: &[TileInfo]) -> CustomBitSet {
+    pub fn make_bitset(&self) -> CustomBitSet {
         let mut bitset = CustomBitSet::empty();
-        for i in 0..tiles.len() {
-            let tile = &tiles[i];
-            if self.land && tile.any_corner_matches(LAND) {
-                bitset.set(i);
-                continue;
-            }
-            if self.grass && tile.any_corner_matches(GRASS) {
-                bitset.set(i);
-                continue;
-            }
-            if self.plateau && tile.any_corner_matches(PLATEAU) {
-                bitset.set(i);
-                continue;
-            }
-            if self.sand && tile.any_corner_matches(SAND) {
-                bitset.set(i);
-                continue;
-            }
-            if self.savannah && tile.any_corner_matches(SAVANNAH) {
-                bitset.set(i);
-                continue;
-            }
-            if self.rocks && tile.any_corner_matches(ROCKS) {
-                bitset.set(i);
-                continue;
-            }
-            if self.high_rocks && tile.any_corner_matches(HIGH_ROCKS) {
-                bitset.set(i);
-                continue;
-            }
-            if self.water && tile.any_corner_matches(WATER) {
-                bitset.set(i);
-                continue;
-            }
-            if self.road && tile.any_corner_matches(ROAD) {
-                bitset.set(i);
-                continue;
+        macro_rules! cases {
+            ($($inner:ident, $outer:ident => $offset:expr;)*) => {
+                $(
+                    if self.$inner {
+                        if self.$outer {
+                            for i in 0..18 { bitset.set($offset+i); }
+                        } else {
+                            bitset.set($offset+4);
+                        }
+                        for i in 18..24 { bitset.set($offset+i);}
+                    }else if self.$outer {
+                        bitset.set($offset+13);
+                    }
+                )*
             }
         }
+        cases!(
+            grass, land => 0;
+            plateau, land => 24;
+            sand, land => 24*2;
+            savannah, land => 24*3;
+            rocks, land => 24*4;
+            plateau, rocks => 24*5;
+            grass, savannah => 24*6;
+            high_rocks, rocks => 24*7;
+            water, land => 24*8;
+            road, land => 24*9;
+        );
         bitset
     }
 }
@@ -84,14 +73,6 @@ pub struct TileInfo {
     pub south_east: u8,
     pub tile_x: usize,
     pub tile_y: usize
-}
-impl TileInfo {
-    fn any_corner_matches(&self, terrain_type: u8) -> bool {
-        self.north_west == terrain_type ||
-            self.north_east == terrain_type ||
-            self.south_west == terrain_type ||
-            self.south_east == terrain_type
-    }
 }
 
 pub fn make_tiling_lookup() -> Vec<TileInfo> {
