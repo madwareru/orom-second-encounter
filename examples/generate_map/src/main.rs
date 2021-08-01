@@ -30,13 +30,19 @@ use {
         DefaultEntropyChoiceHeuristic
     }
 };
-use egui::{FontDefinitions, FontFamily};
+use egui::{FontDefinitions, FontFamily, Align2};
 
 #[derive(PartialEq)]
 enum IterationState {
     Idle,
     Collapsing,
     Presenting
+}
+
+#[derive(PartialEq)]
+enum GeneralCommand {
+    Collapse(CustomBitSet),
+    CollapseIteratively(CustomBitSet)
 }
 
 type CustomBitSet = [u8; 30];
@@ -57,19 +63,19 @@ struct Stage {
     terrain_gui_textures: Vec<Texture>,
     tiles: Vec<TileInfo>,
     modules: Vec<WfcModule<CustomBitSet>>,
+    available_tiles: AvailableTiles,
     tile_selection: (usize, usize),
     tile_resolution: (f32, f32),
     current_tool: u8,
     tile_modules: Vec<usize>,
     show_grid: bool,
     show_ui: bool,
-    should_update: bool,
-    should_update_iteratively: bool,
     iterative_results_receiver: Receiver<(usize, CustomBitSet)>,
     iterative_results_transmitter: Sender<(usize, CustomBitSet)>,
     compound_results_receiver: Receiver<Result<Vec<usize>, WfcError>>,
     compound_results_transmitter: Sender<Result<Vec<usize>, WfcError>>,
     mouse_down: bool,
+    command_queue: VecDeque<GeneralCommand>,
     draw_queue: VecDeque<(usize, usize, u8)>,
     iterative_speed: i32,
     iterative_update_state: IterationState
@@ -233,18 +239,18 @@ impl Stage {
             tiles,
             tile_modules,
             modules,
+            available_tiles: AvailableTiles::default(),
             tile_selection: (0, 0),
             mouse_down: false,
             tile_resolution,
             show_grid: true,
             show_ui: true,
             current_tool: GRASS,
-            should_update: false,
-            should_update_iteratively: false,
             iterative_results_receiver,
             iterative_results_transmitter,
             compound_results_receiver,
             compound_results_transmitter,
+            command_queue: VecDeque::new(),
             draw_queue: VecDeque::new(),
             egui,
             iterative_speed: 10,
@@ -279,14 +285,19 @@ impl Stage {
         egui::Window::new("general")
             .default_width(130.0)
             .resizable(false)
+            .anchor(Align2::LEFT_TOP, [0.0, 0.0])
             .show(&egui_ctx, |ui| {
                 {
                     ui.vertical_centered_justified(|ui| {
                         if ui.button("Collapse").clicked() {
-                            self.should_update = true;
+                            self.command_queue.push_back(
+                                GeneralCommand::Collapse(self.available_tiles.make_bitset(&self.tiles))
+                            );
                         }
                         if ui.button("Collapse iteratively").clicked() {
-                            self.should_update_iteratively = true;
+                            self.command_queue.push_back(
+                                GeneralCommand::CollapseIteratively(self.available_tiles.make_bitset(&self.tiles))
+                            );
                         }
                         ui.separator();
                         ui.add(egui::Checkbox::new(&mut self.show_grid, "Show grid (space)"));
@@ -306,6 +317,7 @@ impl Stage {
             .min_width(40.0)
             .default_width(40.0)
             .resizable(false)
+            .anchor(Align2::RIGHT_TOP, [0.0, 0.0])
             .show(&egui_ctx, |ui| {
                 {
                     ui.vertical_centered_justified(|ui| {
@@ -356,6 +368,93 @@ impl Stage {
                     });
                 }
             });
+
+        egui::Window::new("generation settings")
+            .anchor(Align2::CENTER_BOTTOM, [0.0, 0.0])
+            .show(&egui_ctx, |ui| {
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.image(
+                            TextureId::User(
+                                self.terrain_gui_textures[LAND as usize]
+                                    .gl_internal_id() as u64
+                            ),
+                            [20.0, 20.0]
+                        );
+                        ui.checkbox(&mut self.available_tiles.land, "");
+                        ui.image(
+                            TextureId::User(
+                                self.terrain_gui_textures[GRASS as usize]
+                                    .gl_internal_id() as u64
+                            ),
+                            [20.0, 20.0]
+                        );
+                        ui.checkbox(&mut self.available_tiles.grass, "");
+                        ui.image(
+                            TextureId::User(
+                                self.terrain_gui_textures[PLATEAU as usize]
+                                    .gl_internal_id() as u64
+                            ),
+                            [20.0, 20.0]
+                        );
+                        ui.checkbox(&mut self.available_tiles.plateau, "");
+                    });
+                    ui.spacing();
+                    ui.horizontal(|ui| {
+                        ui.image(
+                            TextureId::User(
+                                self.terrain_gui_textures[SAND as usize]
+                                    .gl_internal_id() as u64
+                            ),
+                            [20.0, 20.0]
+                        );
+                        ui.checkbox(&mut self.available_tiles.sand, "");
+                        ui.image(
+                            TextureId::User(
+                                self.terrain_gui_textures[SAVANNAH as usize]
+                                    .gl_internal_id() as u64
+                            ),
+                            [20.0, 20.0]
+                        );
+                        ui.checkbox(&mut self.available_tiles.savannah, "");
+                        ui.image(
+                            TextureId::User(
+                                self.terrain_gui_textures[ROCKS as usize]
+                                    .gl_internal_id() as u64
+                            ),
+                            [20.0, 20.0]
+                        );
+                        ui.checkbox(&mut self.available_tiles.rocks, "");
+                    });
+                    ui.spacing();
+                    ui.horizontal(|ui| {
+                        ui.image(
+                            TextureId::User(
+                                self.terrain_gui_textures[HIGH_ROCKS as usize]
+                                    .gl_internal_id() as u64
+                            ),
+                            [20.0, 20.0]
+                        );
+                        ui.checkbox(&mut self.available_tiles.high_rocks, "");
+                        ui.image(
+                            TextureId::User(
+                                self.terrain_gui_textures[WATER as usize]
+                                    .gl_internal_id() as u64
+                            ),
+                            [20.0, 20.0]
+                        );
+                        ui.checkbox(&mut self.available_tiles.water, "");
+                        ui.image(
+                            TextureId::User(
+                                self.terrain_gui_textures[ROAD as usize]
+                                    .gl_internal_id() as u64
+                            ),
+                            [20.0, 20.0]
+                        );
+                        ui.checkbox(&mut self.available_tiles.road, "");
+                    });
+                });
+            });
     }
 }
 
@@ -363,14 +462,18 @@ impl EventHandler for Stage {
     fn update(&mut self, ctx: &mut Context) {
         if self.iterative_update_state != IterationState::Idle {
             self.flush_iterated_queue(ctx);
-            return; //while we are showing a traversing we don't want anything else to be done
+            return; // While we are showing a traversing we don't want anything else to be done
         }
-        if self.should_update_iteratively {
-            self.initiate_iterative_collapse();
-            return;
-        }
-        if self.should_update {
-            self.collapse(ctx);
+        if let Some(command) = self.command_queue.pop_front() {
+            match command {
+                GeneralCommand::Collapse(tileset) => {
+                    self.collapse(ctx, tileset);
+                }
+                GeneralCommand::CollapseIteratively(tileset) => {
+                    self.initiate_iterative_collapse(tileset);
+                }
+            }
+            return; // Process one command at a time. Do not flush draw queue if there was a command
         }
         if !self.draw_queue.is_empty() {
             self.flush_draw_queue(ctx);
@@ -420,7 +523,7 @@ impl EventHandler for Stage {
             ctx.apply_uniforms(&shaders::InfoTextUniforms {
                 pos: (-0.001, 0.981),
                 scale: (0.1977 * 0.7, 0.034 * 0.7),
-                font_color: (0.6, 0.6, 0.62)
+                font_color: (0.6, 0.6, 0.82)
             });
 
             ctx.draw(0, 6, 1);
@@ -622,8 +725,7 @@ impl Stage { // Drawing related stuff
         self.tilemap_bindings.images[0].update(ctx, casted);
     }
 
-    fn initiate_iterative_collapse(&mut self) {
-        self.should_update_iteratively = false;
+    fn initiate_iterative_collapse(&mut self, tileset: CustomBitSet) {
         self.iterative_update_state = IterationState::Collapsing;
 
         let tx1 = self.iterative_results_transmitter.clone();
@@ -631,12 +733,15 @@ impl Stage { // Drawing related stuff
         let modules = self.modules.clone();
 
         thread::spawn(move || {
-            let mut wfc_context: WfcContext<CustomBitSet> = WfcContext::new(
+            let mut wfc_context: WfcContext<CustomBitSet, DefaultEntropyHeuristic, DrawingChoiceHeuristic<CustomBitSet>> = WfcContext::new(
                 &modules,
                 WIDTH,
                 HEIGHT,
                 DefaultEntropyHeuristic::default(),
-                DefaultEntropyChoiceHeuristic::default(),
+                DrawingChoiceHeuristic {
+                    fallback: Default::default(),
+                    preferable_bits: tileset
+                },
                 Some(tx1)
             );
 
@@ -644,13 +749,16 @@ impl Stage { // Drawing related stuff
         });
     }
 
-    fn collapse(&mut self, ctx: &mut Context) {
-        let mut wfc_context: WfcContext<CustomBitSet> = WfcContext::new(
+    fn collapse(&mut self, ctx: &mut Context, tileset: CustomBitSet) {
+        let mut wfc_context: WfcContext<CustomBitSet, DefaultEntropyHeuristic, DrawingChoiceHeuristic<CustomBitSet>> = WfcContext::new(
             &self.modules,
             WIDTH,
             HEIGHT,
             DefaultEntropyHeuristic::default(),
-            DefaultEntropyChoiceHeuristic::default(),
+            DrawingChoiceHeuristic {
+                fallback: Default::default(),
+                preferable_bits: tileset
+            },
             None
         );
 
@@ -672,7 +780,6 @@ impl Stage { // Drawing related stuff
             let casted = bytemuck::cast_slice(self.surfaces.stage_surface.color_data());
             self.tilemap_bindings.images[0].update(ctx, casted);
         }
-        self.should_update = false;
     }
 
     fn flush_draw_queue(&mut self, ctx: &mut Context) {

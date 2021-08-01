@@ -1,6 +1,81 @@
 use crate::constants::*;
 use simple_tiled_wfc::grid_generation::WfcModule;
 use crate::CustomBitSet;
+use bitsetium::{BitEmpty, BitSet};
+
+pub struct AvailableTiles {
+    pub land: bool,
+    pub grass: bool,
+    pub plateau: bool,
+    pub sand: bool,
+    pub savannah: bool,
+    pub rocks: bool,
+    pub high_rocks: bool,
+    pub water: bool,
+    pub road: bool,
+}
+
+impl Default for AvailableTiles {
+    fn default() -> Self {
+        Self {
+            land: true,
+            grass: true,
+            plateau: true,
+            sand: true,
+            savannah: true,
+            rocks: true,
+            high_rocks: true,
+            water: true,
+            road: true,
+        }
+    }
+}
+
+impl AvailableTiles {
+    pub fn make_bitset(&self, tiles: &[TileInfo]) -> CustomBitSet {
+        let mut bitset = CustomBitSet::empty();
+        for i in 0..tiles.len() {
+            let tile = &tiles[i];
+            if self.land && tile.any_corner_matches(LAND) {
+                bitset.set(i);
+                continue;
+            }
+            if self.grass && tile.any_corner_matches(GRASS) {
+                bitset.set(i);
+                continue;
+            }
+            if self.plateau && tile.any_corner_matches(PLATEAU) {
+                bitset.set(i);
+                continue;
+            }
+            if self.sand && tile.any_corner_matches(SAND) {
+                bitset.set(i);
+                continue;
+            }
+            if self.savannah && tile.any_corner_matches(SAVANNAH) {
+                bitset.set(i);
+                continue;
+            }
+            if self.rocks && tile.any_corner_matches(ROCKS) {
+                bitset.set(i);
+                continue;
+            }
+            if self.high_rocks && tile.any_corner_matches(HIGH_ROCKS) {
+                bitset.set(i);
+                continue;
+            }
+            if self.water && tile.any_corner_matches(WATER) {
+                bitset.set(i);
+                continue;
+            }
+            if self.road && tile.any_corner_matches(ROAD) {
+                bitset.set(i);
+                continue;
+            }
+        }
+        bitset
+    }
+}
 
 pub struct TileInfo {
     pub north_west: u8,
@@ -9,6 +84,14 @@ pub struct TileInfo {
     pub south_east: u8,
     pub tile_x: usize,
     pub tile_y: usize
+}
+impl TileInfo {
+    fn any_corner_matches(&self, terrain_type: u8) -> bool {
+        self.north_west == terrain_type ||
+            self.north_east == terrain_type ||
+            self.south_west == terrain_type ||
+            self.south_east == terrain_type
+    }
 }
 
 pub fn make_tiling_lookup() -> Vec<TileInfo> {
