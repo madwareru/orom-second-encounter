@@ -1,7 +1,8 @@
-use crate::constants::*;
-use simple_tiled_wfc::grid_generation::WfcModule;
-use crate::CustomBitSet;
-use bitsetium::{BitEmpty, BitSet};
+use {
+    crate::{constants::*, CustomBitSet},
+    simple_tiled_wfc::grid_generation::WfcModule,
+    bitsetium::{BitEmpty, BitSet}
+};
 
 pub struct AvailableTiles {
     pub land: bool,

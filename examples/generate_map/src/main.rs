@@ -16,7 +16,7 @@ use {
     },
     miniquad::*,
     egui_miniquad::*,
-    egui::{Color32, TextureId, TextStyle},
+    egui::{Color32, TextureId, TextStyle, FontDefinitions, FontFamily, Align2},
     bitsetium::{BitSearch, BitEmpty, BitSet},
     rom_media_rs::image_rendering::{
         bmp_sprite_decorators::{TrueColorSurfaceSprite, FastBlended},
@@ -30,7 +30,6 @@ use {
         DefaultEntropyChoiceHeuristic
     }
 };
-use egui::{FontDefinitions, FontFamily, Align2};
 
 #[derive(PartialEq)]
 enum IterationState {
@@ -98,8 +97,8 @@ impl Stage {
 
         let (stage_surface, tile_modules) = {
             let mut stage_surface = TrueColorSurfaceSprite::new(
-                SCREEN_WIDTH as usize,
-                SCREEN_HEIGHT as usize
+                STAGE_SURFACE_W,
+                STAGE_SURFACE_H
             );
             let mut wfc_context: WfcContext<CustomBitSet> = WfcContext::new(
                 &modules,

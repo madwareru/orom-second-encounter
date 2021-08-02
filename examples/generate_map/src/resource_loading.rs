@@ -1,10 +1,14 @@
-use rom_media_rs::image_rendering::bmp_sprite_decorators::TrueColorSurfaceSprite;
-use crate::constants::{GRAPHICS_RES, GUI_TEXTURE_BYTES, INFO_TEXT_BYTES};
-use rom_res_rs::ResourceFile;
-use std::io::Cursor;
-use rom_loaders_rs::images::sprite::BmpSprite;
-use rom_media_rs::image_rendering::blittable::BlitBuilder;
-use miniquad::{Texture, TextureParams, TextureFormat, TextureWrap, FilterMode, Context};
+use {
+    rom_res_rs::ResourceFile,
+    rom_loaders_rs::images::sprite::BmpSprite,
+    rom_media_rs::image_rendering::{
+        bmp_sprite_decorators::TrueColorSurfaceSprite,
+        blittable::BlitBuilder
+    },
+    miniquad::{Texture, TextureParams, TextureFormat, TextureWrap, FilterMode, Context},
+    crate::constants::{GRAPHICS_RES, GUI_TEXTURE_BYTES, INFO_TEXT_BYTES},
+    std::io::Cursor
+};
 
 pub fn load_atlas_texture() -> TrueColorSurfaceSprite {
     let atlas = {

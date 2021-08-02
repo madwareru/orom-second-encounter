@@ -41,8 +41,11 @@ pub const fn get_tool_color(tool: u8) -> (f32, f32, f32) {
 pub const SCREEN_WIDTH: i32 = 1280;
 pub const SCREEN_HEIGHT: i32 = 800;
 
-pub const WIDTH: usize = 40;
-pub const HEIGHT: usize = 25;
+pub const MULTIPLIER: usize = 1;
+pub const WIDTH: usize = 40 * MULTIPLIER;
+pub const HEIGHT: usize = 25 * MULTIPLIER;
+pub const STAGE_SURFACE_W: usize = SCREEN_WIDTH as usize * MULTIPLIER;
+pub const STAGE_SURFACE_H: usize = SCREEN_HEIGHT as usize * MULTIPLIER;
 
 #[repr(C)]
 pub struct Vec2 {

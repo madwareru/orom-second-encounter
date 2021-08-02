@@ -460,7 +460,7 @@ fn main() {
                 .iter_mut()
                 .find(|s| {
                     (s.height >= true_h as i32) &&
-                        ((s.right + true_w as i32) as usize) < ATLAS_SIZE
+                    (s.right < (ATLAS_SIZE - true_w) as i32)
                 })
             {
                 let y_pos = matched_shelf.y_position;

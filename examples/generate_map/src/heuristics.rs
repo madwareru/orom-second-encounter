@@ -1,12 +1,21 @@
-use simple_tiled_wfc::grid_generation::{WfcEntropyHeuristic, WfcModule, DefaultEntropyChoiceHeuristic, WfcEntropyChoiceHeuristic};
-use bitsetium::{BitSearch, BitEmpty, BitSet, BitIntersection, BitUnion, BitTestNone};
-use std::hash::Hash;
-use simple_tiled_wfc::{get_bits_set_count, BitsIterator};
-use rand::{thread_rng, Rng};
+use {
+    simple_tiled_wfc::{
+        get_bits_set_count, BitsIterator,
+        grid_generation::{
+            WfcEntropyHeuristic,
+            WfcModule,
+            DefaultEntropyChoiceHeuristic,
+            WfcEntropyChoiceHeuristic
+        }
+    },
+    bitsetium::{BitSearch, BitEmpty, BitSet, BitIntersection, BitUnion, BitTestNone},
+    rand::{thread_rng, Rng},
+    std::hash::Hash
+};
 
 pub fn square_dist(x1: usize, y1: usize, x2: usize, y2: usize) -> f64 {
     (x2 as f64 - x1 as f64) * (x2 as f64 - x1 as f64) +
-        (y2 as f64 - y1 as f64) * (y2 as f64 - y1 as f64)
+    (y2 as f64 - y1 as f64) * (y2 as f64 - y1 as f64)
 }
 
 pub struct LeastDistanceHeuristic {
