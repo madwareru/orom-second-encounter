@@ -23,12 +23,7 @@ use {
         blittable::{Blittable, BlitBuilder}
     },
     simple_tiled_wfc::{get_bits_set_count, BitsIterator, errors::WfcError},
-    simple_tiled_wfc::grid_generation::{
-        WfcModule,
-        WfcContext,
-        DefaultEntropyHeuristic,
-        DefaultEntropyChoiceHeuristic
-    }
+    simple_tiled_wfc::grid_generation::{ WfcContextBuilder, WfcModule }
 };
 
 #[derive(PartialEq)]
@@ -100,14 +95,7 @@ impl Stage {
                 STAGE_SURFACE_W,
                 STAGE_SURFACE_H
             );
-            let mut wfc_context: WfcContext<CustomBitSet> = WfcContext::new(
-                &modules,
-                WIDTH,
-                HEIGHT,
-                Box::new(DefaultEntropyHeuristic::default()),
-                Box::new(DefaultEntropyChoiceHeuristic::default()),
-                None
-            );
+            let mut wfc_context = WfcContextBuilder::new(&modules, WIDTH, HEIGHT).build();
 
             wfc_context.collapse(100, compound_results_transmitter.clone());
 
@@ -732,28 +720,23 @@ impl Stage { // Drawing related stuff
         let modules = self.modules.clone();
 
         thread::spawn(move || {
-            let mut wfc_context = WfcContext::new(
-                &modules,
-                WIDTH,
-                HEIGHT,
-                Box::new(DefaultEntropyHeuristic::default()),
-                Box::new(StrictDrawingChoiceHeuristic { preferable_bits: tileset }),
-                Some(tx1)
-            );
+            let mut wfc_context = WfcContextBuilder::new(&modules, WIDTH, HEIGHT)
+                .with_entropy_choice_heuristic(Box::new(
+                    StrictDrawingChoiceHeuristic { preferable_bits: tileset }
+                ))
+                .with_history_transmitter(tx1)
+                .build();
 
             wfc_context.collapse(10, tx2);
         });
     }
 
     fn collapse(&mut self, ctx: &mut Context, tileset: CustomBitSet) {
-        let mut wfc_context = WfcContext::new(
-            &self.modules,
-            WIDTH,
-            HEIGHT,
-            Box::new(DefaultEntropyHeuristic::default()),
-            Box::new(StrictDrawingChoiceHeuristic { preferable_bits: tileset }),
-            None
-        );
+        let mut wfc_context = WfcContextBuilder::new(&self.modules, WIDTH, HEIGHT)
+            .with_entropy_choice_heuristic(Box::new(
+                StrictDrawingChoiceHeuristic { preferable_bits: tileset }
+            ))
+            .build();
 
         wfc_context.collapse(10, self.compound_results_transmitter.clone());
         if let Ok(tile_modules) = self.compound_results_receiver.recv().unwrap() {
@@ -796,18 +779,12 @@ impl Stage { // Drawing related stuff
                     preferable_bits.set(offset + ix);
                 }
             }
-            let mut wfc_context = WfcContext::from_existing_collapse(
-                &self.modules,
-                WIDTH,
-                HEIGHT,
-                Box::new(LeastDistanceHeuristic { row: next_row, column: next_column }),
-                Box::new(DrawingChoiceHeuristic {
-                    fallback: DefaultEntropyChoiceHeuristic::default(),
-                    preferable_bits
-                }),
-                &self.tile_modules,
-                None
-            );
+            let mut wfc_context = WfcContextBuilder::new(&self.modules, WIDTH, HEIGHT)
+                .use_existing_collapse(&self.tile_modules)
+                .with_entropy_heuristic(Box::new(
+                    LeastDistanceHeuristic { row: next_row, column: next_column }
+                ))
+                .build();
 
             wfc_context.local_collapse(
                 next_row,
