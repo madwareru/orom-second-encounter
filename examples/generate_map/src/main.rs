@@ -104,8 +104,8 @@ impl Stage {
                 &modules,
                 WIDTH,
                 HEIGHT,
-                DefaultEntropyHeuristic::default(),
-                DefaultEntropyChoiceHeuristic::default(),
+                Box::new(DefaultEntropyHeuristic::default()),
+                Box::new(DefaultEntropyChoiceHeuristic::default()),
                 None
             );
 
@@ -732,15 +732,12 @@ impl Stage { // Drawing related stuff
         let modules = self.modules.clone();
 
         thread::spawn(move || {
-            let mut wfc_context: WfcContext<CustomBitSet,
-                DefaultEntropyHeuristic,
-                StrictDrawingChoiceHeuristic<CustomBitSet>
-            > = WfcContext::new(
+            let mut wfc_context = WfcContext::new(
                 &modules,
                 WIDTH,
                 HEIGHT,
-                DefaultEntropyHeuristic::default(),
-                StrictDrawingChoiceHeuristic { preferable_bits: tileset },
+                Box::new(DefaultEntropyHeuristic::default()),
+                Box::new(StrictDrawingChoiceHeuristic { preferable_bits: tileset }),
                 Some(tx1)
             );
 
@@ -749,17 +746,12 @@ impl Stage { // Drawing related stuff
     }
 
     fn collapse(&mut self, ctx: &mut Context, tileset: CustomBitSet) {
-        let mut wfc_context: WfcContext<CustomBitSet,
-            DefaultEntropyHeuristic,
-            StrictDrawingChoiceHeuristic<CustomBitSet>
-        > = WfcContext::new(
+        let mut wfc_context = WfcContext::new(
             &self.modules,
             WIDTH,
             HEIGHT,
-            DefaultEntropyHeuristic::default(),
-            StrictDrawingChoiceHeuristic {
-                preferable_bits: tileset
-            },
+            Box::new(DefaultEntropyHeuristic::default()),
+            Box::new(StrictDrawingChoiceHeuristic { preferable_bits: tileset }),
             None
         );
 
@@ -808,11 +800,11 @@ impl Stage { // Drawing related stuff
                 &self.modules,
                 WIDTH,
                 HEIGHT,
-                LeastDistanceHeuristic { row: next_row, column: next_column },
-                DrawingChoiceHeuristic {
+                Box::new(LeastDistanceHeuristic { row: next_row, column: next_column }),
+                Box::new(DrawingChoiceHeuristic {
                     fallback: DefaultEntropyChoiceHeuristic::default(),
                     preferable_bits
-                },
+                }),
                 &self.tile_modules,
                 None
             );
