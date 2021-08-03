@@ -780,8 +780,9 @@ checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
 
 [[package]]
 name = "simple-tiled-wfc"
-version = "0.7.3"
-source = "git+https://github.com/madwareru/simple-tiled-wfc.git#4855df05f463c05474f134c18e9782f90b5690f9"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31c73b1c73394f37c19ecd8516e6362595a9c6a70c80ed3db87d948db8afb6dc"
 dependencies = [
  "bitsetium",
  "rand",
