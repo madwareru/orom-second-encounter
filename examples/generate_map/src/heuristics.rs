@@ -4,8 +4,8 @@ use {
         grid_generation::{
             WfcEntropyHeuristic,
             WfcModule,
-            DefaultEntropyChoiceHeuristic,
-            WfcEntropyChoiceHeuristic
+            WfcEntropyChoiceHeuristic,
+            DefaultEntropyChoiceHeuristic
         }
     },
     bitsetium::{BitSearch, BitEmpty, BitSet, BitIntersection, BitUnion, BitTestNone},
