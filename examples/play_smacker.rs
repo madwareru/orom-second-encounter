@@ -1,4 +1,4 @@
-use miniquad::*;
+use orom_miniquad::*;
 use rom_media_rs::image_rendering::bmp_sprite_decorators::TrueColorSurfaceSprite;
 use rom_media_rs::image_rendering::blittable::{Blittable, BlitBuilder};
 use std::io::Cursor;
@@ -152,7 +152,7 @@ impl EventHandler for Stage {
 }
 
 mod shader {
-    use miniquad::*;
+    use orom_miniquad ::*;
 
     pub const VERTEX: &str = r#"#version 100
     attribute vec2 pos;
@@ -192,7 +192,7 @@ mod shader {
 }
 
 fn main() {
-    miniquad::start(conf::Conf {
+    orom_miniquad::start(conf::Conf {
         window_width: 640,
         window_height: 480,
         window_title: "play_smacker_miniquad".to_string(),

@@ -1,4 +1,4 @@
-use miniquad::*;
+use orom_miniquad::*;
 
 pub const TILEMAP_VERTEX: &str = //language=glsl
     r#"#version 100

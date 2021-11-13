@@ -14,8 +14,8 @@ use {
         tiling::*,
         resource_loading::*
     },
-    miniquad::*,
-    egui_miniquad::*,
+    orom_miniquad::*,
+    egui_integration::*,
     egui::{Color32, TextureId, TextStyle, FontDefinitions, FontFamily, Align2},
     bitsetium::{BitSearch, BitEmpty, BitSet},
     rom_media_rs::image_rendering::{
@@ -215,6 +215,8 @@ impl Stage {
             .unwrap()
             .insert(0, "JetBrains Mono".to_owned());
         egui.egui_ctx().set_fonts(fonts);
+
+        ctx.show_mouse(true);
 
         Stage {
             tilemap_bindings,
@@ -468,6 +470,12 @@ impl EventHandler for Stage {
     }
 
     fn draw(&mut self, ctx: &mut Context) {
+        self.egui.begin_frame(ctx);
+        self.ui();
+        self.egui.end_frame(ctx);
+
+        // Draw things behind egui here
+
         {
             ctx.begin_default_pass(Default::default());
             ctx.apply_pipeline(&self.tilemap_pipeline);
@@ -517,13 +525,6 @@ impl EventHandler for Stage {
 
             ctx.end_render_pass();
         }
-
-
-        self.egui.begin_frame(ctx);
-        self.ui();
-        self.egui.end_frame(ctx);
-
-        // Draw things behind egui here
 
         self.egui.draw(ctx);
 
@@ -623,7 +624,7 @@ impl EventHandler for Stage {
 
 
 fn main() {
-    miniquad::start(conf::Conf {
+    orom_miniquad::start(conf::Conf {
         window_resizable: false,
         window_width: SCREEN_WIDTH,
         window_height: SCREEN_HEIGHT,

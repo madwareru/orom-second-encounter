@@ -5,7 +5,7 @@ use {
         bmp_sprite_decorators::TrueColorSurfaceSprite,
         blittable::BlitBuilder
     },
-    miniquad::{Texture, TextureParams, TextureFormat, TextureWrap, FilterMode, Context},
+    orom_miniquad::{Texture, TextureParams, TextureFormat, TextureWrap, FilterMode, Context},
     crate::constants::{GRAPHICS_RES, GUI_TEXTURE_BYTES, INFO_TEXT_BYTES},
     std::io::Cursor
 };
